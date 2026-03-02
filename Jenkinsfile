@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKER_IMAGE = "aswathks/flask-ci-cd"
+    }
+
     stages {
 
         stage('Checkout Code') {
@@ -11,19 +15,32 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t flaskapp:latest .'
+                sh 'docker build -t $DOCKER_IMAGE:latest .'
             }
         }
 
-        stage('Stop Old Container') {
+        stage('Login to DockerHub') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-credentials',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                }
+            }
+        }
+
+        stage('Push Image') {
+            steps {
+                sh 'docker push $DOCKER_IMAGE:latest'
+            }
+        }
+
+        stage('Deploy Container') {
             steps {
                 sh 'docker rm -f flaskcontainer || true'
-            }
-        }
-
-        stage('Run Docker Container') {
-            steps {
-                sh 'docker run -d -p 5000:5000 --name flaskcontainer flaskapp:latest'
+                sh 'docker run -d -p 5000:5000 --name flaskcontainer $DOCKER_IMAGE:latest'
             }
         }
     }
